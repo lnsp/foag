@@ -1,6 +1,7 @@
 <template>
   <div>
-    <codemirror v-model="code" :options="{ theme: 'base16-dark', lineNumbers: true, mode: 'javascript' }" class="mb-3"/>
+    <codemirror v-model="code"
+      :options="{ theme: 'base16-dark', lineNumbers: true, mode: 'javascript' }" class="mb-3"/>
     <b-dropdown text="Deploy" variant="primary">
       <b-dropdown-item @click="deploy('go')">as Go</b-dropdown-item>
       <b-dropdown-item @click="deploy('swift')">as Swift</b-dropdown-item>

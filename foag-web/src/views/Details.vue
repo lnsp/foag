@@ -45,7 +45,7 @@ export default {
     this.refresh();
   },
   beforeDestroy() {
-    window.clearTimeout(refreshTimeout);
+    window.clearTimeout(this.refreshTimeout);
   },
 };
 </script>

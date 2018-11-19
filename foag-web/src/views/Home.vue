@@ -13,7 +13,8 @@
         {{ data.value | moment('from') }}
       </template>
       <template slot="Actions" slot-scope="data">
-        <router-link v-if="data.item.Ready" :to="{ name: 'addRoute', params: { id: data.item.ID } }">Bind</router-link>
+        <router-link v-if="data.item.Ready"
+          :to="{ name: 'addRoute', params: { id: data.item.ID } }">Bind</router-link>
       </template>
     </b-table>
   </div>
@@ -47,6 +48,6 @@ export default {
   },
   beforeDestroy() {
     window.clearInterval(this.refreshTimer);
-  }
+  },
 };
 </script>
