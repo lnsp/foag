@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -44,7 +45,7 @@ FROM node:8-alpine
 WORKDIR /app
 COPY . .
 
-CMD ["node", "/app/main.go"]
+CMD ["node", "/app/main.js"]
 `
 
 const cDockerfile = `
@@ -57,6 +58,8 @@ RUN gcc -o /app/main /app/main.c
 CMD ["/app/main"]
 `
 
+const AliasPrefix = "@"
+const BindPrefix = "/bind/"
 const TriggerPrefix = "/trigger/"
 const DeploymentTimeout = 30 * time.Second
 const DeploymentImage = "foog-%16.16s"
@@ -71,12 +74,14 @@ var (
 )
 
 type Registry struct {
-	Items map[string]*Deployment
+	Items   map[string]*Deployment
+	Aliases map[string]*Alias
 }
 
 func NewRegistry() *Registry {
 	return &Registry{
-		Items: make(map[string]*Deployment),
+		Items:   make(map[string]*Deployment),
+		Aliases: make(map[string]*Alias),
 	}
 }
 
@@ -90,8 +95,8 @@ func (registry *Registry) Deploy(lang string, source []byte) (*Deployment, error
 }
 
 func (registry *Registry) Run(id string, stdin io.Reader, stdout, stderr io.Writer) error {
-	deployment, ok := registry.Items[id]
-	if !ok {
+	deployment := registry.Resolve(id)
+	if deployment == nil {
 		return fmt.Errorf("deployment not found")
 	}
 	err := deployment.Run(stdin, stdout, stderr)
@@ -101,19 +106,64 @@ func (registry *Registry) Run(id string, stdin io.Reader, stdout, stderr io.Writ
 	return nil
 }
 
+func (registry *Registry) Resolve(identifier string) *Deployment {
+	if strings.HasPrefix(identifier, AliasPrefix) {
+		id, ok := registry.Aliases[strings.TrimPrefix(identifier, AliasPrefix)]
+		if !ok {
+			return nil
+		}
+		identifier = id.For
+	}
+	return registry.Items[identifier]
+}
+
+func (registry *Registry) Find(identifier string) *Deployment {
+	var (
+		item         *Deployment
+		longestMatch int
+	)
+	for _, d := range registry.Items {
+		if strings.HasPrefix(d.ID, identifier) && len(identifier) > longestMatch {
+			item = d
+			longestMatch = len(identifier)
+		}
+	}
+	return item
+}
+
+func (registry *Registry) Bind(alias string, deployment *Deployment) *Alias {
+	item := &Alias{
+		Name: alias,
+		For:  deployment.ID,
+		URL:  TriggerPrefix + AliasPrefix + alias,
+		Date: time.Now(),
+	}
+	registry.Aliases[alias] = item
+	return item
+}
+
 type Deployment struct {
-	ID       string
-	Source   []byte `json:"-"`
-	Image    string `json:"-"`
-	Date     time.Time
-	Language string
-	URL      string
-	Ready    bool
+	ID        string
+	Source    []byte `json:"-"`
+	Image     string
+	Date      time.Time
+	Language  string
+	URL       string
+	Ready     bool
+	BuildLogs string `json:"-"`
+}
+
+type Alias struct {
+	Name string
+	For  string
+	URL  string
+	Date time.Time
 }
 
 func NewDeployment(source []byte, lang string) *Deployment {
 	hasher := sha256.New()
 	hasher.Write(source)
+	hasher.Write([]byte(lang))
 	sum := hasher.Sum(nil)
 	id := hex.EncodeToString(sum)
 	return &Deployment{
@@ -165,15 +215,20 @@ func (d *Deployment) Build() error {
 	// Run docker build
 	imageName := fmt.Sprintf("foog-%16.16s", d.ID)
 	cmd := exec.Command("docker", "build", "-t", imageName, dir)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
 	go func() {
-		fmt.Printf("====== STARTING BUILD %s ======\n", imageName)
+		tmpfile, err := ioutil.TempFile("", "foogd-*.log")
+		if err != nil {
+			log.Printf("Failed to hookup build logs: %v\n", err)
+			return
+		}
+		d.BuildLogs = tmpfile.Name()
+		cmd.Stdout = tmpfile
+		cmd.Stderr = tmpfile
 		err = cmd.Run()
 		if err != nil {
-			fmt.Println("====== BUILD FAILED ======")
+			log.Printf("Failed to build %s (%s): %v\n", d.Image, d.Language, err)
 		} else {
-			fmt.Println("====== BUILD SUCCESSFUL ======")
+			log.Printf("Built image %s (%s)\n", d.Image, d.Language)
 			d.Ready = true
 		}
 	}()
@@ -191,8 +246,13 @@ func NewServer() *Server {
 		Registry: NewRegistry(),
 	}
 	srv.HandleFunc(TriggerPrefix, srv.trigger)
+	srv.HandleFunc(BindPrefix, srv.bind)
+	srv.HandleFunc("/describe/", srv.describe)
+	srv.HandleFunc("/logs/", srv.logs)
 	srv.HandleFunc("/deploy", srv.deploy)
+	srv.HandleFunc("/listAlias", srv.listAlias)
 	srv.HandleFunc("/list", srv.list)
+
 	return srv
 }
 
@@ -200,6 +260,25 @@ func (srv *Server) setupCORS(w *http.ResponseWriter, r *http.Request) {
 	(*w).Header().Set("Access-Control-Allow-Origin", "*")
 	(*w).Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
 	(*w).Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization")
+}
+
+func (srv *Server) error(w http.ResponseWriter, status int, msg string) {
+	w.WriteHeader(status)
+	encoder := json.NewEncoder(w)
+	err := encoder.Encode(struct {
+		Error   bool
+		Message string
+	}{
+		Error:   true,
+		Message: msg,
+	})
+	if err != nil {
+		w.Header().Add("Content-Type", "text/plain")
+		fmt.Fprintf(w, "error (%d): %s\n", status, msg)
+		return
+	}
+	log.Printf("Error while serving request: %s\n", msg)
+	w.Header().Add("Content-Type", "application/json")
 }
 
 func (srv *Server) deploy(w http.ResponseWriter, r *http.Request) {
@@ -210,21 +289,73 @@ func (srv *Server) deploy(w http.ResponseWriter, r *http.Request) {
 	encoder := json.NewEncoder(w)
 	data, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		encoder.Encode(struct {
-			Error   bool
-			Message string
-		}{true, "can not read body"})
+		srv.error(w, http.StatusBadRequest, "Failed to read body")
 		return
 	}
 	deployment, err := srv.Registry.Deploy(r.URL.Query().Get("lang"), data)
 	if err != nil {
-		encoder.Encode(struct {
-			Error   bool
-			Message string
-		}{true, err.Error()})
+		srv.error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	encoder.Encode(deployment)
+}
+
+func (srv *Server) logs(w http.ResponseWriter, r *http.Request) {
+	srv.setupCORS(&w, r)
+	if r.Method == "OPTIONS" {
+		return
+	}
+	id := filepath.Base(r.URL.Path)
+	deployment := srv.Registry.Resolve(id)
+	if deployment == nil {
+		deployment = srv.Registry.Find(id)
+	}
+	if deployment == nil {
+		srv.error(w, http.StatusNotFound, "Deployment not found")
+		return
+	}
+	logfile, err := os.Open(deployment.BuildLogs)
+	if err != nil {
+		srv.error(w, http.StatusNotFound, "BuildLogs not found")
+		return
+	}
+	defer logfile.Close()
+	io.Copy(w, logfile)
+}
+
+func (srv *Server) describe(w http.ResponseWriter, r *http.Request) {
+	srv.setupCORS(&w, r)
+	if r.Method == "OPTIONS" {
+		return
+	}
+	id := filepath.Base(r.URL.Path)
+	deployment := srv.Registry.Resolve(id)
+	if deployment == nil {
+		deployment = srv.Registry.Find(id)
+	}
+	if deployment == nil {
+		srv.error(w, http.StatusNotFound, "Deployment not found")
+		return
+	}
+	encoder := json.NewEncoder(w)
+	encoder.Encode(deployment)
+}
+
+func (srv *Server) bind(w http.ResponseWriter, r *http.Request) {
+	srv.setupCORS(&w, r)
+	if r.Method == "OPTIONS" {
+		return
+	}
+	id := filepath.Base(r.URL.Path)
+	alias := r.URL.Query().Get("to")
+	deployment := srv.Registry.Resolve(id)
+	if deployment == nil {
+		srv.error(w, http.StatusNotFound, "Deployment does not exist")
+		return
+	}
+	item := srv.Registry.Bind(alias, deployment)
+	encoder := json.NewEncoder(w)
+	encoder.Encode(item)
 }
 
 func (srv *Server) trigger(w http.ResponseWriter, r *http.Request) {
@@ -232,16 +363,25 @@ func (srv *Server) trigger(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "OPTIONS" {
 		return
 	}
-	encoder := json.NewEncoder(w)
 	id := filepath.Base(r.URL.Path)
 	err := srv.Registry.Run(id, r.Body, w, w)
 	if err != nil {
-		encoder.Encode(struct {
-			Error   bool
-			Message string
-		}{true, err.Error()})
+		srv.error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+}
+
+func (srv *Server) listAlias(w http.ResponseWriter, r *http.Request) {
+	srv.setupCORS(&w, r)
+	if r.Method == "OPTIONS" {
+		return
+	}
+	encoder := json.NewEncoder(w)
+	aliases := []*Alias{}
+	for _, a := range srv.Registry.Aliases {
+		aliases = append(aliases, a)
+	}
+	encoder.Encode(aliases)
 }
 
 func (srv *Server) list(w http.ResponseWriter, r *http.Request) {
