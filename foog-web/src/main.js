@@ -8,9 +8,11 @@ import router from './router';
 
 
 Vue.config.productionTip = false;
+Vue.prototype.$endpoint = process.env.VUE_APP_FOOGD;
+Vue.filter('formatId', value => value.slice(0, 8));
 Vue.use(BootstrapVue);
 Vue.use(VueAxios, axios);
-Vue.use(VueCodemirror, { theme: 'base16-dark' });
+Vue.use(VueCodemirror);
 Vue.use(require('vue-moment'));
 
 new Vue({

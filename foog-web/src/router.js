@@ -14,9 +14,24 @@ export default new Router({
       component: Home,
     },
     {
-      path: '/deploy',
-      name: 'deployFunction',
-      component: () => import(/* webpackChunkName: "about" */ './views/Deploy.vue'),
+      path: '/build',
+      name: 'build',
+      component: () => import(/* webpackChunkName: "about" */ './views/Build.vue'),
+    },
+    {
+      path: '/details/:id',
+      name: 'details',
+      component: () => import('./views/Details.vue'),
+    },
+    {
+      path: '/route/:id',
+      name: 'addRoute',
+      component: () => import('./views/Route.vue'),
+    },
+    {
+      path: '/route',
+      name: 'route',
+      component: () => import('./views/Route.vue'),
     },
   ],
 });
