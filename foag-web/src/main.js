@@ -8,7 +8,7 @@ import router from './router';
 
 
 Vue.config.productionTip = false;
-Vue.prototype.$endpoint = process.env.VUE_APP_FOOGD;
+Vue.prototype.$endpoint = process.env.VUE_APP_FOAGD;
 Vue.filter('formatId', value => value.slice(0, 8));
 Vue.use(BootstrapVue);
 Vue.use(VueAxios, axios);

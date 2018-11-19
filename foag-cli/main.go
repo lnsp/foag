@@ -19,7 +19,7 @@ Created: {{ .Date }}
 URL:     {{ .URL }}
 `))
 
-var foogEndpoint = os.Getenv("FOOG_SERVER")
+var foagEndpoint = os.Getenv("FOAG_ENDPOINT")
 
 func errorAndExit(r io.Reader) {
 	errBody := struct {
@@ -48,7 +48,7 @@ var buildLogsCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		id := args[0]
-		url := fmt.Sprintf("%s/logs/%s", foogEndpoint, id)
+		url := fmt.Sprintf("%s/logs/%s", foagEndpoint, id)
 		resp, err := http.Get(url)
 		if err != nil {
 			fmt.Println("Failed to retrieve build logs")
@@ -73,7 +73,7 @@ var aliasBindCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
 		id, alias := args[0], args[1]
-		url := fmt.Sprintf("%s/bind/%s?to=%s", foogEndpoint, id, alias)
+		url := fmt.Sprintf("%s/bind/%s?to=%s", foagEndpoint, id, alias)
 		resp, err := http.Post(url, "text/plain", nil)
 		if err != nil {
 			fmt.Println("Failed to bind to alias")
@@ -97,7 +97,7 @@ var aliasListCmd = &cobra.Command{
 	Short: "List all bound aliases",
 	Args:  cobra.ExactArgs(0),
 	Run: func(cmd *cobra.Command, args []string) {
-		url := foogEndpoint + "/listAlias"
+		url := foagEndpoint + "/listAlias"
 		resp, err := http.Get(url)
 		if err != nil {
 			fmt.Println("Failed to list deployments")
@@ -126,7 +126,7 @@ var listCmd = &cobra.Command{
 	Short: "List all deployed applications",
 	Args:  cobra.ExactArgs(0),
 	Run: func(cmd *cobra.Command, args []string) {
-		url := foogEndpoint + "/list"
+		url := foagEndpoint + "/list"
 		resp, err := http.Get(url)
 		if err != nil {
 			fmt.Println("Failed to list deployments")
@@ -158,7 +158,7 @@ var describeCmd = &cobra.Command{
 	Short: "View deployment details",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		resp, err := http.Get(fmt.Sprintf(describeEndpoint, foogEndpoint, args[0]))
+		resp, err := http.Get(fmt.Sprintf(describeEndpoint, foagEndpoint, args[0]))
 		if err != nil {
 			fmt.Println("Failed to fetch deployment details")
 			return
@@ -200,7 +200,7 @@ var deployCmd = &cobra.Command{
 		if deployLang != "" {
 			fileLang = deployLang
 		}
-		resp, err := http.Post(fmt.Sprintf(deployEndpoint, foogEndpoint, fileLang), "text/plain", file)
+		resp, err := http.Post(fmt.Sprintf(deployEndpoint, foagEndpoint, fileLang), "text/plain", file)
 		if err != nil {
 			fmt.Println("Failed to send deploy request")
 			return
@@ -214,13 +214,13 @@ var deployCmd = &cobra.Command{
 		}{}
 		decoder := json.NewDecoder(resp.Body)
 		decoder.Decode(&respURL)
-		fmt.Printf("Your app is now running on %s%s\n", foogEndpoint, respURL.URL)
+		fmt.Printf("Your app is now running on %s%s\n", foagEndpoint, respURL.URL)
 	},
 }
 
 var rootCmd = &cobra.Command{
-	Use:   "foog-cli",
-	Short: "foog-cli is a serverless toolkit",
+	Use:   "foag-cli",
+	Short: "foag-cli is a serverless toolkit",
 }
 
 func init() {

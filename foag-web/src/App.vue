@@ -2,7 +2,7 @@
   <div id="app" class="container">
     <div id="nav" class="row align-items-center">
       <div class="col-auto">
-        <h3 class="brand">foog</h3>
+        <h3 class="brand">foag</h3>
       </div>
       <div class="col-auto">
         <router-link to="/">Home</router-link>

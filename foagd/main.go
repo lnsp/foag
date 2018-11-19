@@ -62,7 +62,7 @@ const AliasPrefix = "@"
 const BindPrefix = "/bind/"
 const TriggerPrefix = "/trigger/"
 const DeploymentTimeout = 30 * time.Second
-const DeploymentImage = "foog-%16.16s"
+const DeploymentImage = "foag-%16.16s"
 
 var (
 	dockerfiles = map[string][]byte{
@@ -213,10 +213,10 @@ func (d *Deployment) Build() error {
 		return fmt.Errorf("failed to write dockerfile: %v", err)
 	}
 	// Run docker build
-	imageName := fmt.Sprintf("foog-%16.16s", d.ID)
+	imageName := fmt.Sprintf("foag-%16.16s", d.ID)
 	cmd := exec.Command("docker", "build", "-t", imageName, dir)
 	go func() {
-		tmpfile, err := ioutil.TempFile("", "foogd-*.log")
+		tmpfile, err := ioutil.TempFile("", "foagd-*.log")
 		if err != nil {
 			log.Printf("Failed to hookup build logs: %v\n", err)
 			return
