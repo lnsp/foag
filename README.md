@@ -1,4 +1,4 @@
-# foag
+# ![foag](https://raw.githubusercontent.com/lnsp/foag/master/docs/logo.png)
 
 foag (pronounced as *[ˈfoːɐ̯k]*) is a Function-as-a-Service platform built upon Docker containers. It was built as a proof-of-concept within an hour and is not suited for production usage.
 
