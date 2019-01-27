@@ -34,7 +34,7 @@ FROM swift:latest
 
 WORKDIR /app
 COPY . .
-RUN swiftc -o /app/main /app/main.swift
+RUN swiftc -o /app/main /app/*.swift
 
 CMD ["/app/main"]
 `
@@ -53,7 +53,7 @@ FROM gcc:4.9
 
 WORKDIR /app
 COPY . .
-RUN gcc -o /app/main /app/main.c
+RUN gcc -o /app/main /app/*.c
 
 CMD ["/app/main"]
 `
