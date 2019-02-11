@@ -19,7 +19,7 @@ To deploy a function to a foagd service you have the option to choose between C,
 
 ```bash
 # Set up foagd endpoint first, in this case locally
-export FOAGD_ENDPOINT=http://localhost:8080
+export FOAG_ENDPOINT=http://localhost:8080
 # Assuming you have cloned this repository
 cd docs/examples/hello-c
 # and now we can deploy!
